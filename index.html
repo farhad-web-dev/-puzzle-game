@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberPuzzle Matrix</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cyberCyan: '#00f3ff',
+                        cyberPink: '#ff0055',
+                        cyberGold: '#ffcc00',
+                        cyberDark: '#0a0a12',
+                        cyberPanel: 'rgba(16, 18, 30, 0.90)',
+                    },
+                    fontFamily: {
+                        mono: ['Courier New', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #05050a;
+            color: #00f3ff;
+            font-family: 'Courier New', Courier, monospace;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* Scanline Overlay Effect */
+        .scanline {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0, 0, 0, 0.35) 50%,
+                rgba(0, 0, 0, 0.35)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        /* Neon Glow Utility Classes */
+        .glow-cyan {
+            box-shadow: 0 0 15px #00f3ff, inset 0 0 10px rgba(0, 243, 255, 0.3);
+            border: 1px solid #00f3ff;
+        }
+        .glow-pink {
+            box-shadow: 0 0 15px #ff0055, inset 0 0 10px rgba(255, 0, 85, 0.3);
+            border: 1px solid #ff0055;
+        }
+        .glow-gold {
+            box-shadow: 0 0 15px #ffcc00, inset 0 0 10px rgba(255, 204, 0, 0.3);
+            border: 1px solid #ffcc00;
+        }
+        .text-glow-cyan { text-shadow: 0 0 8px #00f3ff; }
+        .text-glow-pink { text-shadow: 0 0 8px #ff0055; }
+        .text-glow-gold { text-shadow: 0 0 8px #ffcc00; }
+
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: rgba(12, 16, 28, 0.90);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 243, 255, 0.3);
+        }
+
+        /* Particle Overlay */
+        #particleCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* Level Button Lock Styling */
+        .level-btn-locked {
+            opacity: 0.4;
+            cursor: not-allowed;
+            border-color: #334155 !important;
+            color: #64748b !important;
+            box-shadow: none !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-2 md:p-6 relative">
+    <!-- Scanline Effects Overlay -->
+    <div class="fixed inset-0 scanline z-40"></div>
+    <canvas id="particleCanvas"></canvas>
+
+    <!-- TOP HUD HEADER -->
+    <header class="w-full max-w-4xl glass-panel rounded-xl p-4 mb-3 flex flex-wrap items-center justify-between gap-4 z-10 border-b-2 border-cyberCyan">
+        <div class="flex items-center space-x-3">
+            <div class="w-4 h-4 rounded-full bg-cyberPink animate-pulse glow-pink"></div>
+            <h1 class="text-xl md:text-2xl font-bold tracking-widest text-glow-cyan uppercase">CYBERPUZZLE // MATRIX</h1>
+        </div>
+        
+        <!-- HUD Stats -->
+        <div class="flex items-center space-x-6 text-sm md:text-base font-bold">
+            <div class="flex items-center space-x-2">
+                <span class="text-gray-400">STAGE:</span>
+                <span id="hudLevel" class="text-cyberGold text-glow-gold">1/9</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-gray-400">MOVES:</span>
+                <span id="hudMoves" class="text-cyberCyan text-glow-cyan">0</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-gray-400">TIME:</span>
+                <span id="hudTimer" class="text-cyberPink text-glow-pink">00:00</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN GAME CONTAINER -->
+    <main class="w-full max-w-4xl flex-1 flex flex-col items-center justify-center relative z-10">
+        
+        <!-- LEVEL SELECTOR BAR -->
+        <div class="w-full glass-panel rounded-lg p-3 mb-3 text-center flex flex-col md:flex-row items-center justify-between gap-3">
+            <div class="text-left">
+                <h2 id="levelTitle" class="text-md md:text-lg font-bold text-cyberGold text-glow-gold uppercase">
+                    STAGE 1: CIRCUIT WIRE (EASY 3x3)
+                </h2>
+                <p id="levelInstructions" class="text-xs text-gray-300 mt-0.5">
+                    Rotate wire conduits to connect Power Source (Cyan) to System Core (Gold).
+                </p>
+            </div>
+            <button onclick="toggleLevelSelectModal()" class="px-3 py-1.5 bg-cyberCyan/20 hover:bg-cyberCyan/40 text-cyberCyan font-bold rounded border border-cyberCyan text-xs tracking-wider whitespace-nowrap glow-cyan">
+                🗺️ SELECT STAGE
+            </button>
+        </div>
+
+        <!-- WORKSPACE AREA -->
+        <div class="w-full glass-panel rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center min-h-[420px] relative">
+            
+            <!-- Circuit Wire Canvas Container -->
+            <div id="circuitContainer" class="w-full flex justify-center items-center">
+                <canvas id="circuitCanvas" class="max-w-full rounded-lg cursor-pointer glow-cyan"></canvas>
+            </div>
+
+            <!-- Laser Mirror Canvas Container -->
+            <div id="laserContainer" class="w-full flex justify-center items-center hidden">
+                <canvas id="laserCanvas" class="max-w-full rounded-lg cursor-pointer glow-pink"></canvas>
+            </div>
+
+            <!-- Tile Sliding Container -->
+            <div id="tileContainer" class="w-full flex justify-center items-center hidden">
+                <div id="tileGrid" class="grid gap-2 p-2 bg-gray-950/80 rounded-xl glow-gold w-[320px] h-[320px] md:w-[380px] md:h-[380px]">
+                    <!-- Tiles injected dynamically -->
+                </div>
+            </div>
+
+            <!-- LEVEL COMPLETE / OVERLOAD OVERLAY -->
+            <div id="completeOverlay" class="absolute inset-0 bg-cyberDark/95 rounded-2xl flex flex-col items-center justify-center p-6 text-center hidden z-20">
+                <h2 id="winHeadline" class="text-2xl md:text-4xl font-extrabold text-cyberGold text-glow-gold mb-2 tracking-widest animate-bounce">
+                    STAGE NODE CLEARED!
+                </h2>
+                <p id="winSubtext" class="text-cyberCyan text-sm md:text-base mb-4">DATA FLOW SYNCHRONIZED SUCCESSFULLY.</p>
+                <div class="glass-panel p-4 rounded-xl border border-cyberCyan mb-6 text-left space-y-1.5 min-w-[260px]">
+                    <p class="text-xs md:text-sm text-gray-300">STAGE TIME: <span id="finalTime" class="text-cyberPink font-bold">00:00</span></p>
+                    <p class="text-xs md:text-sm text-gray-300">MOVES TAKEN: <span id="finalMoves" class="text-cyberCyan font-bold">0</span></p>
+                    <p class="text-xs md:text-sm text-gray-300">BEST MOVES: <span id="bestMoves" class="text-cyberGold font-bold">-</span></p>
+                </div>
+                <div class="flex gap-4">
+                    <button onclick="nextLevel()" id="nextStageBtn" class="px-6 py-2.5 bg-cyberCyan hover:bg-cyan-400 text-black font-extrabold rounded-lg glow-cyan transition-all uppercase tracking-wider text-sm">
+                        NEXT STAGE ▶
+                    </button>
+                    <button onclick="toggleLevelSelectModal()" class="px-6 py-2.5 bg-cyberPink hover:bg-pink-600 text-white font-bold rounded-lg glow-pink transition-all uppercase tracking-wider text-sm">
+                        STAGE SELECT
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTROL BUTTONS BAR -->
+        <div class="w-full max-w-4xl flex items-center justify-between gap-4 mt-4">
+            <button onclick="toggleAudio()" id="audioBtn" class="px-4 py-2 glass-panel hover:bg-cyberCyan/20 text-cyberCyan font-bold rounded-lg border border-cyberCyan/50 flex items-center space-x-2 text-xs md:text-sm">
+                <span>🔊 AUDIO: ON</span>
+            </button>
+            
+            <div class="flex items-center space-x-3">
+                <button onclick="giveHint()" class="px-4 py-2 glass-panel hover:bg-cyberGold/20 text-cyberGold font-bold rounded-lg border border-cyberGold/50 text-xs md:text-sm glow-gold">
+                    💡 HINT
+                </button>
+                <button onclick="restartCurrentLevel()" class="px-4 py-2 glass-panel hover:bg-cyberPink/20 text-cyberPink font-bold rounded-lg border border-cyberPink/50 text-xs md:text-sm glow-pink">
+                    🔄 RESTART
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- LEVEL SELECTION MODAL -->
+    <div id="levelSelectModal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden">
+        <div class="glass-panel rounded-2xl max-w-xl w-full p-6 border-2 border-cyberCyan">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-cyberGold text-glow-gold">SELECT MATRIX STAGE</h3>
+                <button onclick="toggleLevelSelectModal()" class="text-gray-400 hover:text-white font-bold text-xl">&times;</button>
+            </div>
+
+            <!-- Stage Categories -->
+            <div class="space-y-4">
+                <div>
+                    <h4 class="text-xs text-cyberCyan font-bold uppercase tracking-wider mb-2">CATEGORY 1: CIRCUIT WIRES</h4>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="selectStage(1)" id="stageBtn1" class="p-3 glass-panel rounded-lg text-xs font-bold border border-cyberCyan text-cyberCyan">1. 3x3 Easy</button>
+                        <button onclick="selectStage(2)" id="stageBtn2" class="p-3 glass-panel rounded-lg text-xs font-bold border border-cyberCyan text-cyberCyan">2. 4x4 Medium</button>
+                        <button onclick="selectStage(3)" id="stageBtn3" class="p-3 glass-panel rounded-lg text-xs font-bold border border-cyberCyan text-cyberCyan">3. 5x5 Hard</button>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-xs text-cyberPink font-bold uppercase tracking-wider mb-2">CATEGORY 2: NEON LASERS</h4>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="selectStage(4)" id="stageBtn4" class="p-3 glass-panel rounded-lg text-xs font-bold border border-cyberPink text-cyberPink">4. Alpha 4x4</button>
+                        <button onclick="selectStage(5)" id="stageBtn5" class="p-3 glass-panel rounded-lg text-xs font-bold border border-cyberPink text-cyberPink">5. Beta 5x5</button>
+                        <button onclick="selectStage(6)" id="stageBtn6" class="p-3 glass-panel rounded-lg text-xs font-bold border border-cyberPink text-cyberPink">6. Gamma 6x6</button>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-xs text-cyberGold font-bold uppercase tracking-wider mb-2">CATEGORY 3: SLIDING MATRIX</h4>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="selectStage(7)" id="stageBtn7" class="p-3 glass-panel rounded-lg text-xs font-bold border border-cyberGold text-cyberGold">7. 3x3 Matrix</button>
+                        <button onclick="selectStage(8)" id="stageBtn8" class="p-3 glass-panel rounded-lg text-xs font-bold border border-cyberGold text-cyberGold">8. 4x4 Matrix</button>
+                        <button onclick="selectStage(9)" id="stageBtn9" class="p-3 glass-panel rounded-lg text-xs font-bold border border-cyberGold text-cyberGold">9. 5x5 Matrix</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-between items-center pt-3 border-t border-gray-800">
+                <button onclick="resetDataProgress()" class="text-xs text-red-400 hover:text-red-300 underline">Reset Saved Data</button>
+                <button onclick="toggleLevelSelectModal()" class="px-4 py-2 bg-cyberDark border border-cyberCyan text-cyberCyan text-xs font-bold rounded">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="mt-4 text-center text-xs text-gray-500 z-10">
+        CYBERPUZZLE MATRIX // LOCAL STORAGE SAVED // PROJECT 19
+    </footer>
+
+    <script>
+        /* ----------------------------------------------------
+           LOCAL STORAGE & PROGRESS STATE MANAGER
+        ---------------------------------------------------- */
+        const STORAGE_KEY = 'CYBER_PUZZLE_MATRIX_SAVE_V1';
+
+        let gameProgress = {
+            unlockedStage: 1,
+            bestMoves: {},
+            audioEnabled: true
+        };
+
+        function loadSavedProgress() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    gameProgress = Object.assign(gameProgress, JSON.parse(saved));
+                } catch(e) { console.error("Error parsing saved progress:", e); }
+            }
+            audioEnabled = gameProgress.audioEnabled;
+            updateAudioButtonUI();
+        }
+
+        function saveProgress() {
+            gameProgress.audioEnabled = audioEnabled;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(gameProgress));
+        }
+
+        function resetDataProgress() {
+            if (confirm("Reset all unlocked levels and high scores?")) {
+                localStorage.removeItem(STORAGE_KEY);
+                gameProgress = { unlockedStage: 1, bestMoves: {}, audioEnabled: true };
+                saveProgress();
+                updateLevelModalUI();
+                selectStage(1);
+                toggleLevelSelectModal();
+            }
+        }
+
+        /* ----------------------------------------------------
+           AUDIO SYSTEM (WEB AUDIO API)
+        ---------------------------------------------------- */
+        let audioCtx = null;
+        let audioEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            if (!audioEnabled) return;
+            initAudio();
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'click') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.exponentialRampToValueAtTime(200, now + 0.08);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'slide') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(450, now + 0.1);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'win') {
+                    const notes = [523.25, 659.25, 783.99, 1046.50];
+                    notes.forEach((freq, idx) => {
+                        const noteOsc = audioCtx.createOscillator();
+                        const noteGain = audioCtx.createGain();
+                        noteOsc.connect(noteGain);
+                        noteGain.connect(audioCtx.destination);
+                        noteOsc.type = 'square';
+                        noteOsc.frequency.setValueAtTime(freq, now + idx * 0.1);
+                        noteGain.gain.setValueAtTime(0.08, now + idx * 0.1);
+                        noteGain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.3);
+                        noteOsc.start(now + idx * 0.1);
+                        noteOsc.stop(now + idx * 0.1 + 0.3);
+                    });
+                } else if (type === 'laser') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, now);
+                    osc.frequency.linearRampToValueAtTime(90, now + 0.15);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                }
+            } catch (e) { console.log(e); }
+        }
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            saveProgress();
+            updateAudioButtonUI();
+        }
+
+        function updateAudioButtonUI() {
+            const btn = document.getElementById('audioBtn');
+            btn.innerHTML = audioEnabled ? '<span>🔊 AUDIO: ON</span>' : '<span>🔇 AUDIO: OFF</span>';
+        }
+
+        /* ----------------------------------------------------
+           HUD & TIMER LOGIC
+        ---------------------------------------------------- */
+        let currentStage = 1;
+        let moveCount = 0;
+        let secondsElapsed = 0;
+        let timerInterval = null;
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            secondsElapsed = 0;
+            moveCount = 0;
+            document.getElementById('hudMoves').innerText = '0';
+            document.getElementById('hudTimer').innerText = '00:00';
+            
+            timerInterval = setInterval(() => {
+                secondsElapsed++;
+                const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+                const secs = String(secondsElapsed % 60).padStart(2, '0');
+                document.getElementById('hudTimer').innerText = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function incrementMoves() {
+            moveCount++;
+            document.getElementById('hudMoves').innerText = moveCount;
+        }
+
+        function updateHUDStage() {
+            document.getElementById('hudLevel').innerText = `${currentStage}/9`;
+        }
+
+        function triggerStageWin() {
+            clearInterval(timerInterval);
+            playSound('win');
+            triggerVictoryParticles();
+
+            // Check and update best moves
+            if (!gameProgress.bestMoves[currentStage] || moveCount < gameProgress.bestMoves[currentStage]) {
+                gameProgress.bestMoves[currentStage] = moveCount;
+            }
+
+            // Unlock next stage if applicable
+            if (currentStage < 9 && currentStage >= gameProgress.unlockedStage) {
+                gameProgress.unlockedStage = currentStage + 1;
+            }
+
+            saveProgress();
+
+            // Populate Victory Overlay
+            document.getElementById('finalTime').innerText = document.getElementById('hudTimer').innerText;
+            document.getElementById('finalMoves').innerText = moveCount;
+            document.getElementById('bestMoves').innerText = gameProgress.bestMoves[currentStage] || moveCount;
+
+            const nextBtn = document.getElementById('nextStageBtn');
+            if (currentStage === 9) {
+                document.getElementById('winHeadline').innerText = "ALL MATRIX STAGES CLEARED!";
+                document.getElementById('winSubtext').innerText = "YOU ARE A MASTER CYBER ARCHITECT.";
+                nextBtn.classList.add('hidden');
+            } else {
+                document.getElementById('winHeadline').innerText = `STAGE ${currentStage} CLEARED!`;
+                document.getElementById('winSubtext').innerText = "DATA FLOW SYNCHRONIZED SUCCESSFULLY.";
+                nextBtn.classList.remove('hidden');
+            }
+
+            document.getElementById('completeOverlay').classList.remove('hidden');
+        }
+
+        function nextLevel() {
+            document.getElementById('completeOverlay').classList.add('hidden');
+            if (currentStage < 9) {
+                selectStage(currentStage + 1);
+            }
+        }
+
+        /* ----------------------------------------------------
+           STAGE SETUP DEFINITIONS (STAGES 1 - 9)
+        ---------------------------------------------------- */
+        function loadStage(stageNum) {
+            currentStage = stageNum;
+            updateHUDStage();
+            startTimer();
+            document.getElementById('completeOverlay').classList.add('hidden');
+
+            document.getElementById('circuitContainer').classList.add('hidden');
+            document.getElementById('laserContainer').classList.add('hidden');
+            document.getElementById('tileContainer').classList.add('hidden');
+
+            if (stageNum <= 3) {
+                document.getElementById('circuitContainer').classList.remove('hidden');
+                initCircuitStage(stageNum);
+            } else if (stageNum <= 6) {
+                document.getElementById('laserContainer').classList.remove('hidden');
+                initLaserStage(stageNum);
+            } else {
+                document.getElementById('tileContainer').classList.remove('hidden');
+                initTileStage(stageNum);
+            }
+        }
+
+        /* ----------------------------------------------------
+           CATEGORY 1: CIRCUIT WIRE CONNECTION (STAGES 1-3)
+        ---------------------------------------------------- */
+        let circuitGrid = [];
+        let circuitSize = 3;
+        const circuitCanvas = document.getElementById('circuitCanvas');
+        const cCtx = circuitCanvas.getContext('2d');
+        let circuitCellSize = 80;
+
+        function initCircuitStage(stageNum) {
+            if (stageNum === 1) {
+                circuitSize = 3;
+                document.getElementById('levelTitle').innerText = "STAGE 1: CIRCUIT WIRE (EASY 3x3)";
+                circuitGrid = [
+                    [{ type: 'S', angle: 0 }, { type: 'I', angle: 1 }, { type: 'L', angle: 1 }],
+                    [{ type: 'L', angle: 0 }, { type: 'T', angle: 2 }, { type: 'I', angle: 0 }],
+                    [{ type: 'I', angle: 1 }, { type: 'L', angle: 0 }, { type: 'E', angle: 0 }]
+                ];
+            } else if (stageNum === 2) {
+                circuitSize = 4;
+                document.getElementById('levelTitle').innerText = "STAGE 2: CIRCUIT WIRE (MEDIUM 4x4)";
+                circuitGrid = [
+                    [{ type: 'S', angle: 0 }, { type: 'I', angle: 1 }, { type: 'L', angle: 1 }, { type: 'I', angle: 1 }],
+                    [{ type: 'L', angle: 0 }, { type: 'T', angle: 2 }, { type: 'L', angle: 2 }, { type: 'I', angle: 0 }],
+                    [{ type: 'I', angle: 0 }, { type: 'L', angle: 0 }, { type: 'T', angle: 3 }, { type: 'L', angle: 1 }],
+                    [{ type: 'L', angle: 3 }, { type: 'I', angle: 1 }, { type: 'L', angle: 0 }, { type: 'E', angle: 0 }]
+                ];
+            } else {
+                circuitSize = 5;
+                document.getElementById('levelTitle').innerText = "STAGE 3: CIRCUIT WIRE (HARD 5x5)";
+                circuitGrid = [
+                    [{ type: 'S', angle: 0 }, { type: 'T', angle: 1 }, { type: 'I', angle: 1 }, { type: 'L', angle: 1 }, { type: 'I', angle: 0 }],
+                    [{ type: 'L', angle: 0 }, { type: 'L', angle: 2 }, { type: 'X', angle: 0 }, { type: 'T', angle: 2 }, { type: 'I', angle: 0 }],
+                    [{ type: 'I', angle: 0 }, { type: 'T', angle: 1 }, { type: 'L', angle: 3 }, { type: 'I', angle: 1 }, { type: 'L', angle: 2 }],
+                    [{ type: 'L', angle: 3 }, { type: 'I', angle: 1 }, { type: 'T', angle: 0 }, { type: 'L', angle: 0 }, { type: 'I', angle: 0 }],
+                    [{ type: 'I', angle: 1 }, { type: 'L', angle: 0 }, { type: 'I', angle: 1 }, { type: 'L', angle: 0 }, { type: 'E', angle: 0 }]
+                ];
+            }
+
+            circuitCellSize = circuitSize === 3 ? 100 : (circuitSize === 4 ? 80 : 66);
+            circuitCanvas.width = circuitSize * circuitCellSize;
+            circuitCanvas.height = circuitSize * circuitCellSize;
+
+            // Randomize tile rotation except source/end
+            for (let r = 0; r < circuitSize; r++) {
+                for (let c = 0; c < circuitSize; c++) {
+                    if (circuitGrid[r][c].type !== 'S' && circuitGrid[r][c].type !== 'E') {
+                        circuitGrid[r][c].angle = Math.floor(Math.random() * 4);
+                    }
+                }
+            }
+
+            checkCircuitPower();
+            drawCircuit();
+        }
+
+        function getConnections(tile) {
+            const a = tile.angle % 4;
+            let base = [false, false, false, false];
+            switch(tile.type) {
+                case 'I': base = [true, false, true, false]; break;
+                case 'L': base = [true, true, false, false]; break;
+                case 'T': base = [true, true, false, true]; break;
+                case 'X': base = [true, true, true, true]; break;
+                case 'S': base = [false, true, false, false]; break;
+                case 'E': base = [false, false, false, true]; break;
+            }
+            const rotated = [false, false, false, false];
+            for (let i = 0; i < 4; i++) rotated[(i + a) % 4] = base[i];
+            return rotated;
+        }
+
+        let poweredTiles = [];
+
+        function checkCircuitPower() {
+            poweredTiles = Array(circuitSize).fill(false).map(() => Array(circuitSize).fill(false));
+            const queue = [{r: 0, c: 0}];
+            poweredTiles[0][0] = true;
+
+            const dr = [-1, 0, 1, 0];
+            const dc = [0, 1, 0, -1];
+            const opposite = [2, 3, 0, 1];
+            let endPowered = false;
+
+            while (queue.length > 0) {
+                const {r, c} = queue.shift();
+                const conn = getConnections(circuitGrid[r][c]);
+
+                if (circuitGrid[r][c].type === 'E') endPowered = true;
+
+                for (let dir = 0; dir < 4; dir++) {
+                    if (conn[dir]) {
+                        const nr = r + dr[dir];
+                        const nc = c + dc[dir];
+                        if (nr >= 0 && nr < circuitSize && nc >= 0 && nc < circuitSize && !poweredTiles[nr][nc]) {
+                            const neighborConn = getConnections(circuitGrid[nr][nc]);
+                            if (neighborConn[opposite[dir]]) {
+                                poweredTiles[nr][nc] = true;
+                                queue.push({r: nr, c: nc});
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (endPowered) setTimeout(() => triggerStageWin(), 300);
+        }
+
+        function drawCircuit() {
+            cCtx.clearRect(0, 0, circuitCanvas.width, circuitCanvas.height);
+            for (let r = 0; r < circuitSize; r++) {
+                for (let c = 0; c < circuitSize; c++) {
+                    const x = c * circuitCellSize;
+                    const y = r * circuitCellSize;
+                    const tile = circuitGrid[r][c];
+                    const isPowered = poweredTiles[r] && poweredTiles[r][c];
+
+                    cCtx.fillStyle = '#0f1423';
+                    cCtx.fillRect(x + 2, y + 2, circuitCellSize - 4, circuitCellSize - 4);
+                    cCtx.strokeStyle = isPowered ? '#00f3ff' : '#1f293d';
+                    cCtx.lineWidth = 1.5;
+                    cCtx.strokeRect(x + 2, y + 2, circuitCellSize - 4, circuitCellSize - 4);
+
+                    cCtx.save();
+                    cCtx.translate(x + circuitCellSize / 2, y + circuitCellSize / 2);
+                    cCtx.strokeStyle = isPowered ? '#00f3ff' : '#475569';
+                    cCtx.shadowColor = isPowered ? '#00f3ff' : 'transparent';
+                    cCtx.shadowBlur = isPowered ? 10 : 0;
+                    cCtx.lineWidth = circuitSize === 5 ? 6 : 8;
+                    cCtx.lineCap = 'round';
+
+                    const conn = getConnections(tile);
+
+                    cCtx.beginPath();
+                    cCtx.arc(0, 0, 4, 0, Math.PI * 2);
+                    cCtx.fillStyle = isPowered ? '#00f3ff' : '#475569';
+                    cCtx.fill();
+
+                    if (conn[0]) { cCtx.beginPath(); cCtx.moveTo(0, 0); cCtx.lineTo(0, -circuitCellSize / 2 + 5); cCtx.stroke(); }
+                    if (conn[1]) { cCtx.beginPath(); cCtx.moveTo(0, 0); cCtx.lineTo(circuitCellSize / 2 - 5, 0); cCtx.stroke(); }
+                    if (conn[2]) { cCtx.beginPath(); cCtx.moveTo(0, 0); cCtx.lineTo(0, circuitCellSize / 2 - 5); cCtx.stroke(); }
+                    if (conn[3]) { cCtx.beginPath(); cCtx.moveTo(0, 0); cCtx.lineTo(-circuitCellSize / 2 + 5, 0); cCtx.stroke(); }
+
+                    if (tile.type === 'S') {
+                        cCtx.fillStyle = '#00f3ff';
+                        cCtx.beginPath();
+                        cCtx.arc(-8, 0, 8, 0, Math.PI * 2);
+                        cCtx.fill();
+                    } else if (tile.type === 'E') {
+                        cCtx.fillStyle = '#ffcc00';
+                        cCtx.beginPath();
+                        cCtx.arc(8, 0, 8, 0, Math.PI * 2);
+                        cCtx.fill();
+                        cCtx.shadowColor = '#ffcc00';
+                        cCtx.shadowBlur = 12;
+                    }
+                    cCtx.restore();
+                }
+            }
+        }
+
+        circuitCanvas.addEventListener('click', (e) => {
+            if (currentStage > 3) return;
+            const rect = circuitCanvas.getBoundingClientRect();
+            const c = Math.floor((e.clientX - rect.left) / (rect.width / circuitSize));
+            const r = Math.floor((e.clientY - rect.top) / (rect.height / circuitSize));
+
+            if (r >= 0 && r < circuitSize && c >= 0 && c < circuitSize) {
+                playSound('click');
+                circuitGrid[r][c].angle = (circuitGrid[r][c].angle + 1) % 4;
+                incrementMoves();
+                checkCircuitPower();
+                drawCircuit();
+            }
+        });
+
+        /* ----------------------------------------------------
+           CATEGORY 2: NEON LASER & MIRRORS (STAGES 4-6)
+        ---------------------------------------------------- */
+        let laserGrid = [];
+        let laserGridSize = 4;
+        const laserCanvas = document.getElementById('laserCanvas');
+        const lCtx = laserCanvas.getContext('2d');
+        let laserCellSize = 70;
+        let laserPath = [];
+        let hitTarget = false;
+
+        function initLaserStage(stageNum) {
+            if (stageNum === 4) {
+                laserGridSize = 4;
+                document.getElementById('levelTitle').innerText = "STAGE 4: NEON LASER (ALPHA 4x4)";
+                laserGrid = [
+                    [{ type: 'E' }, { type: 'EMPTY' }, { type: 'M', mirrorType: 1 }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'X' }, { type: 'EMPTY' }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'M', mirrorType: 0 }, { type: 'EMPTY' }, { type: 'T' }],
+                    [{ type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'EMPTY' }]
+                ];
+            } else if (stageNum === 5) {
+                laserGridSize = 5;
+                document.getElementById('levelTitle').innerText = "STAGE 5: NEON LASER (BETA 5x5)";
+                laserGrid = [
+                    [{ type: 'E' }, { type: 'EMPTY' }, { type: 'M', mirrorType: 1 }, { type: 'EMPTY' }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'X' }, { type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'M', mirrorType: 0 }, { type: 'EMPTY' }, { type: 'X' }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'M', mirrorType: 1 }, { type: 'EMPTY' }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'T' }]
+                ];
+            } else {
+                laserGridSize = 6;
+                document.getElementById('levelTitle').innerText = "STAGE 6: NEON LASER (GAMMA 6x6)";
+                laserGrid = [
+                    [{ type: 'E' }, { type: 'EMPTY' }, { type: 'M', mirrorType: 1 }, { type: 'EMPTY' }, { type: 'X' }, { type: 'EMPTY' }],
+                    [{ type: 'X' }, { type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'M', mirrorType: 0 }, { type: 'EMPTY' }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'M', mirrorType: 0 }, { type: 'X' }, { type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'M', mirrorType: 1 }, { type: 'EMPTY' }, { type: 'X' }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'X' }, { type: 'EMPTY' }, { type: 'M', mirrorType: 0 }, { type: 'EMPTY' }, { type: 'EMPTY' }],
+                    [{ type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'EMPTY' }, { type: 'T' }]
+                ];
+            }
+
+            laserCellSize = laserGridSize === 4 ? 80 : (laserGridSize === 5 ? 68 : 58);
+            laserCanvas.width = laserGridSize * laserCellSize;
+            laserCanvas.height = laserGridSize * laserCellSize;
+
+            calculateLaserPath();
+            drawLaserStage();
+        }
+
+        function calculateLaserPath() {
+            laserPath = [];
+            hitTarget = false;
+            let curr = { r: 0, c: 0 };
+            let dir = 'R';
+
+            let startX = curr.c * laserCellSize + laserCellSize / 2;
+            let startY = curr.r * laserCellSize + laserCellSize / 2;
+            laserPath.push({ x: startX, y: startY });
+
+            let steps = 0;
+            while (steps < 30) {
+                steps++;
+                if (dir === 'R') curr.c++;
+                else if (dir === 'L') curr.c--;
+                else if (dir === 'U') curr.r--;
+                else if (dir === 'D') curr.r++;
+
+                if (curr.r < 0 || curr.r >= laserGridSize || curr.c < 0 || curr.c >= laserGridSize) {
+                    laserPath.push({ x: curr.c * laserCellSize + laserCellSize / 2, y: curr.r * laserCellSize + laserCellSize / 2 });
+                    break;
+                }
+
+                laserPath.push({ x: curr.c * laserCellSize + laserCellSize / 2, y: curr.r * laserCellSize + laserCellSize / 2 });
+                const tile = laserGrid[curr.r][curr.c];
+
+                if (tile.type === 'X') break;
+                if (tile.type === 'T') { hitTarget = true; break; }
+                if (tile.type === 'M') {
+                    if (tile.mirrorType === 0) { // '/'
+                        if (dir === 'R') dir = 'U';
+                        else if (dir === 'L') dir = 'D';
+                        else if (dir === 'U') dir = 'R';
+                        else if (dir === 'D') dir = 'L';
+                    } else { // '\'
+                        if (dir === 'R') dir = 'D';
+                        else if (dir === 'L') dir = 'U';
+                        else if (dir === 'U') dir = 'L';
+                        else if (dir === 'D') dir = 'R';
+                    }
+                }
+            }
+
+            if (hitTarget) setTimeout(() => triggerStageWin(), 300);
+        }
+
+        function drawLaserStage() {
+            lCtx.clearRect(0, 0, laserCanvas.width, laserCanvas.height);
+            for (let r = 0; r < laserGridSize; r++) {
+                for (let c = 0; c < laserGridSize; c++) {
+                    const x = c * laserCellSize;
+                    const y = r * laserCellSize;
+                    const tile = laserGrid[r][c];
+
+                    lCtx.fillStyle = '#0a0d17';
+                    lCtx.fillRect(x + 2, y + 2, laserCellSize - 4, laserCellSize - 4);
+                    lCtx.strokeStyle = '#1a233a';
+                    lCtx.strokeRect(x + 2, y + 2, laserCellSize - 4, laserCellSize - 4);
+
+                    if (tile.type === 'E') {
+                        lCtx.fillStyle = '#ff0055';
+                        lCtx.beginPath();
+                        lCtx.arc(x + laserCellSize/2, y + laserCellSize/2, 12, 0, Math.PI * 2);
+                        lCtx.fill();
+                        lCtx.shadowColor = '#ff0055';
+                        lCtx.shadowBlur = 10;
+                    } else if (tile.type === 'T') {
+                        lCtx.fillStyle = hitTarget ? '#ffcc00' : '#334155';
+                        lCtx.beginPath();
+                        lCtx.arc(x + laserCellSize/2, y + laserCellSize/2, 14, 0, Math.PI * 2);
+                        lCtx.fill();
+                        lCtx.strokeStyle = '#ffcc00';
+                        lCtx.stroke();
+                        lCtx.shadowColor = '#ffcc00';
+                        lCtx.shadowBlur = hitTarget ? 15 : 0;
+                    } else if (tile.type === 'M') {
+                        lCtx.save();
+                        lCtx.translate(x + laserCellSize/2, y + laserCellSize/2);
+                        lCtx.strokeStyle = '#00f3ff';
+                        lCtx.lineWidth = 5;
+                        lCtx.shadowColor = '#00f3ff';
+                        lCtx.shadowBlur = 8;
+                        lCtx.beginPath();
+                        if (tile.mirrorType === 0) { lCtx.moveTo(-14, 14); lCtx.lineTo(14, -14); }
+                        else { lCtx.moveTo(-14, -14); lCtx.lineTo(14, 14); }
+                        lCtx.stroke();
+                        lCtx.restore();
+                    } else if (tile.type === 'X') {
+                        lCtx.fillStyle = '#1e293b';
+                        lCtx.fillRect(x + 6, y + 6, laserCellSize - 12, laserCellSize - 12);
+                        lCtx.strokeStyle = '#ff0055';
+                        lCtx.strokeRect(x + 6, y + 6, laserCellSize - 12, laserCellSize - 12);
+                    }
+                }
+            }
+
+            if (laserPath.length > 1) {
+                lCtx.save();
+                lCtx.strokeStyle = '#ff0055';
+                lCtx.lineWidth = 4;
+                lCtx.shadowColor = '#ff0055';
+                lCtx.shadowBlur = 12;
+                lCtx.beginPath();
+                lCtx.moveTo(laserPath[0].x, laserPath[0].y);
+                for (let i = 1; i < laserPath.length; i++) lCtx.lineTo(laserPath[i].x, laserPath[i].y);
+                lCtx.stroke();
+                lCtx.restore();
+            }
+        }
+
+        laserCanvas.addEventListener('click', (e) => {
+            if (currentStage < 4 || currentStage > 6) return;
+            const rect = laserCanvas.getBoundingClientRect();
+            const c = Math.floor((e.clientX - rect.left) / (rect.width / laserGridSize));
+            const r = Math.floor((e.clientY - rect.top) / (rect.height / laserGridSize));
+
+            if (r >= 0 && r < laserGridSize && c >= 0 && c < laserGridSize && laserGrid[r][c].type === 'M') {
+                playSound('laser');
+                laserGrid[r][c].mirrorType = laserGrid[r][c].mirrorType === 0 ? 1 : 0;
+                incrementMoves();
+                calculateLaserPath();
+                drawLaserStage();
+            }
+        });
+
+        /* ----------------------------------------------------
+           CATEGORY 3: TILE SLIDING MATRIX (STAGES 7-9)
+        ---------------------------------------------------- */
+        let tileDimension = 3;
+        let tileState = [];
+        let tileWinningState = [];
+
+        function initTileStage(stageNum) {
+            if (stageNum === 7) {
+                tileDimension = 3;
+                document.getElementById('levelTitle').innerText = "STAGE 7: SLIDING MATRIX (3x3)";
+            } else if (stageNum === 8) {
+                tileDimension = 4;
+                document.getElementById('levelTitle').innerText = "STAGE 8: SLIDING MATRIX (4x4)";
+            } else {
+                tileDimension = 5;
+                document.getElementById('levelTitle').innerText = "STAGE 9: SLIDING MATRIX (5x5)";
+            }
+
+            const totalTiles = tileDimension * tileDimension;
+            tileWinningState = Array.from({length: totalTiles - 1}, (_, i) => i + 1);
+            tileWinningState.push(0);
+
+            tileState = [...tileWinningState];
+            let emptyIdx = totalTiles - 1;
+
+            // Randomize state
+            for (let i = 0; i < totalTiles * 20; i++) {
+                const validMoves = getValidTileMoves(emptyIdx, tileDimension);
+                const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                [tileState[emptyIdx], tileState[randomMove]] = [tileState[randomMove], tileState[emptyIdx]];
+                emptyIdx = randomMove;
+            }
+
+            renderTileGrid();
+        }
+
+        function getValidTileMoves(emptyIdx, dim) {
+            const moves = [];
+            const row = Math.floor(emptyIdx / dim);
+            const col = emptyIdx % dim;
+            if (row > 0) moves.push(emptyIdx - dim);
+            if (row < dim - 1) moves.push(emptyIdx + dim);
+            if (col > 0) moves.push(emptyIdx - 1);
+            if (col < dim - 1) moves.push(emptyIdx + 1);
+            return moves;
+        }
+
+        function renderTileGrid() {
+            const gridContainer = document.getElementById('tileGrid');
+            gridContainer.style.gridTemplateColumns = `repeat(${tileDimension}, minmax(0, 1fr))`;
+            gridContainer.innerHTML = '';
+
+            tileState.forEach((val, idx) => {
+                const tileBtn = document.createElement('button');
+                if (val === 0) {
+                    tileBtn.className = "w-full h-full rounded-lg bg-gray-950/40 border border-gray-800/50 cursor-default";
+                } else {
+                    const fontSize = tileDimension === 5 ? 'text-sm md:text-base' : 'text-lg md:text-2xl';
+                    tileBtn.className = `w-full h-full rounded-lg bg-cyberDark border border-cyberCyan/50 flex items-center justify-center ${fontSize} font-black text-cyberCyan text-glow-cyan hover:bg-cyberCyan/20 transition-all glow-cyan`;
+                    tileBtn.innerText = val;
+                    tileBtn.onclick = () => handleTileClick(idx);
+                }
+                gridContainer.appendChild(tileBtn);
+            });
+        }
+
+        function handleTileClick(idx) {
+            if (currentStage < 7) return;
+            const emptyIdx = tileState.indexOf(0);
+            const validMoves = getValidTileMoves(emptyIdx, tileDimension);
+
+            if (validMoves.includes(idx)) {
+                playSound('slide');
+                [tileState[emptyIdx], tileState[idx]] = [tileState[idx], tileState[emptyIdx]];
+                incrementMoves();
+                renderTileGrid();
+
+                if (JSON.stringify(tileState) === JSON.stringify(tileWinningState)) {
+                    setTimeout(() => triggerStageWin(), 300);
+                }
+            }
+        }
+
+        /* ----------------------------------------------------
+           MODAL & STAGE NAVIGATION
+        ---------------------------------------------------- */
+        function toggleLevelSelectModal() {
+            playSound('click');
+            const modal = document.getElementById('levelSelectModal');
+            if (modal.classList.contains('hidden')) {
+                updateLevelModalUI();
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function updateLevelModalUI() {
+            for (let i = 1; i <= 9; i++) {
+                const btn = document.getElementById(`stageBtn${i}`);
+                if (i <= gameProgress.unlockedStage) {
+                    btn.classList.remove('level-btn-locked');
+                    btn.disabled = false;
+                } else {
+                    btn.classList.add('level-btn-locked');
+                    btn.disabled = true;
+                }
+            }
+        }
+
+        function selectStage(stageNum) {
+            if (stageNum <= gameProgress.unlockedStage) {
+                playSound('click');
+                document.getElementById('levelSelectModal').classList.add('hidden');
+                loadStage(stageNum);
+            }
+        }
+
+        function restartCurrentLevel() {
+            playSound('click');
+            loadStage(currentStage);
+        }
+
+        function giveHint() {
+            playSound('click');
+            if (currentStage <= 3) alert("HINT: Align wires sequentially starting from Cyan Source to Gold Core!");
+            else if (currentStage <= 6) alert("HINT: Click top-left mirrors to redirect the beam around obstacles!");
+            else alert("HINT: Solve tile row by row from top to bottom!");
+        }
+
+        /* ----------------------------------------------------
+           VICTORY PARTICLES OVERLAY
+        ---------------------------------------------------- */
+        const pCanvas = document.getElementById('particleCanvas');
+        const pCtx = pCanvas.getContext('2d');
+        let particles = [];
+
+        function resizeParticleCanvas() {
+            pCanvas.width = window.innerWidth;
+            pCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeParticleCanvas);
+        resizeParticleCanvas();
+
+        function triggerVictoryParticles() {
+            particles = [];
+            const colors = ['#00f3ff', '#ff0055', '#ffcc00'];
+            for (let i = 0; i < 90; i++) {
+                particles.push({
+                    x: pCanvas.width / 2,
+                    y: pCanvas.height / 2,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.5) * 12,
+                    size: Math.random() * 5 + 2,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    alpha: 1
+                });
+            }
+        }
+
+        function animateParticles() {
+            pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+            particles.forEach((p, idx) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.015;
+                pCtx.save();
+                pCtx.globalAlpha = Math.max(0, p.alpha);
+                pCtx.fillStyle = p.color;
+                pCtx.beginPath();
+                pCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                pCtx.fill();
+                pCtx.restore();
+                if (p.alpha <= 0) particles.splice(idx, 1);
+            });
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        /* ----------------------------------------------------
+           INITIALIZATION
+        ---------------------------------------------------- */
+        window.onload = function() {
+            loadSavedProgress();
+            loadStage(1);
+        };
+    </script>
+</body>
+</html>
